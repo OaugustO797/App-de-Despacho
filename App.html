@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formatador de Despachos</title>
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    input,
+    textarea,
+    button {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0b1220;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      font-size: 15px;
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      transition: transform 150ms, opacity 150ms;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .actions button {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .error {
+      color: #f87171;
+      font-weight: 700;
+      margin: 12px 0 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid #334155;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #0b1220;
+    }
+
+    .muted {
+      color: #94a3b8;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Formatador de Despachos</h1>
+
+  <p class="muted">
+    Informe a data do turno na <strong>primeira linha</strong> (dd/mm/aaaa) e abaixo cole os registros no padrão
+    <strong>HHhMM - Abertura da tela de Despacho - EMP - EXCEDIDO EM: 00%</strong>.
+    O sistema detecta virada de dia, aplica +3h para SharePoint e exporta para Excel em blocos de 256 itens.
+  </p>
+
+  <div class="card">
+    <label for="linhas">Data do turno + linhas de despacho</label>
+    <textarea id="linhas"
+      placeholder="dd/mm/aaaa&#10;18h23 - Abertura da tela de Despacho - EMP - EXCEDIDO EM: 00%"></textarea>
+
+    <div class="actions" style="margin-top: 12px;">
+      <button id="btnProcessar">Processar</button>
+      <button id="btnBaixar" disabled>Baixar Excel</button>
+    </div>
+
+    <div id="erro" class="error" role="alert" aria-live="polite"></div>
+    <div id="resumo" class="muted" style="margin-top: 10px;"></div>
+    <div id="preview"></div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- =========================  JAVASCRIPT  ============================ -->
+  <!-- =================================================================== -->
+
+  <script>
+    const timeSplitPattern = /\s*[-–—]\s*/;
+    const timePattern = /^(?<hour>\d{1,2})[:hH](?<minute>\d{2})$/;
+    const percentPattern = /(?<percent>\d{1,3})%/;
+    const MAX_PER_BLOCK = 256;
+
+    const btnProcessar = document.getElementById("btnProcessar");
+    const btnBaixar = document.getElementById("btnBaixar");
+    const preview = document.getElementById("preview");
+    const erro = document.getElementById("erro");
+    const resumo = document.getElementById("resumo");
+
+    let registros = [];
+
+    // ------------------------ PARSERS ------------------------
+
+    function parseTimePiece(piece) {
+      const match = piece.trim().match(timePattern);
+      if (!match) throw new Error(`Horário inválido: '${piece}'`);
+
+      const hour = Number(match.groups.hour);
+      const minute = Number(match.groups.minute);
+
+      if (hour < 0 || hour > 23 || minute < 0 || minute > 59)
+        throw new Error(`Horário fora do intervalo 00:00-23:59: '${piece}'`);
+
+      return { hour, minute };
+    }
+
+    function parsePercent(text) {
+      const match = text.match(percentPattern);
+      if (!match) throw new Error(`Percentual não encontrado em: '${text}'`);
+
+      const percent = Number(match.groups.percent);
+      if (percent < 0 || percent > 100)
+        throw new Error(`Percentual fora do intervalo 0-100: ${percent}`);
+
+      return percent;
+    }
+
+    function parseLine(line) {
+      const parts = line.split(timeSplitPattern);
+
+      if (parts.length < 3)
+        throw new Error(
+          "Formato esperado: 'HHhMM - Abertura da tela de Despacho - EMP - EXCEDIDO EM: 00%'"
+        );
+
+      const timePart = parts[0].trim();
+      const companyPart = parts[2].trim().toUpperCase();
+      const percentPart = parts[parts.length - 1];
+
+      const { hour, minute } = parseTimePiece(timePart);
+
+      if (!/^[A-Z0-9]{3}$/.test(companyPart))
+        throw new Error(`Empresa inválida: '${companyPart}'. Use 3 dígitos/letras.`);
+
+      const percent = parsePercent(percentPart);
+
+      return { hour, minute, company: companyPart, percent };
+    }
+
+    // ---------------------- DATA EXTRACTION ----------------------
+
+    function extractShiftDate(lines) {
+      const pattern = /^\s*(?<day>\d{2})\/(?<month>\d{2})\/(?<year>\d{4})\s*$/;
+
+      let dateLineIndex = -1;
+      let shiftDate = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const match = line.match(pattern);
+        if (!match) continue;
+
+        const day = Number(match.groups.day);
+        const month = Number(match.groups.month);
+        const year = Number(match.groups.year);
+
+        if (day < 1 || day > 31 || month < 1 || month > 12)
+          throw new Error(`Data inválida: '${line.trim()}'`);
+
+        shiftDate = { day, month, year };
+        dateLineIndex = i;
+        break;
+      }
+
+      if (!shiftDate)
+        throw new Error("Informe a data na primeira linha no formato dd/mm/aaaa.");
+
+      const remaining = lines.slice(dateLineIndex + 1);
+
+      while (remaining.length && !remaining[0].trim()) remaining.shift();
+
+      if (
+        remaining.length &&
+        remaining[0].trim().toLowerCase() === "(aqui começa a lista)"
+      ) {
+        remaining.shift();
+      }
+
+      return { shiftDate, remainingLines: remaining };
+    }
+
+    // ------------------------ RECORDS ------------------------
+
+    function buildRecords(lines, shiftDate) {
+      const results = [];
+      let { day: d, month: m, year: y } = shiftDate;
+
+      let previousMinutes = null;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+
+        const parsed = parseLine(line);
+        const minutes = parsed.hour * 60 + parsed.minute;
+
+        if (previousMinutes !== null && minutes < previousMinutes) {
+          const dateObj = new Date(Date.UTC(y, m - 1, d));
+          dateObj.setUTCDate(dateObj.getUTCDate() + 1);
+
+          y = dateObj.getUTCFullYear();
+          m = dateObj.getUTCMonth() + 1;
+          d = dateObj.getUTCDate();
+        }
+
+        const loggedAt = new Date(
+          Date.UTC(y, m - 1, d, parsed.hour, parsed.minute)
+        );
+
+        results.push({
+          originalLine: line,
+          loggedAt,
+          company: parsed.company,
+          exceededPercent: parsed.percent,
+        });
+
+        previousMinutes = minutes;
+      }
+
+      return results;
+    }
+
+    function sharepointTimestamp(record) {
+      const shifted = new Date(record.loggedAt.getTime() + 3 * 3600 * 1000);
+      return shifted.toISOString().replace(/\.\d{3}Z$/, "Z");
+    }
+
+    function observation(r) {
+      return `Abertura da tela de Despacho - EXCEDIDO EM: ${r.exceededPercent}%`;
+    }
+
+    // ------------------------ PREVIEW TABLE ------------------------
+
+    function renderPreview(data) {
+      if (!data.length) {
+        preview.innerHTML = `<p class="muted">Nenhum registro processado.</p>`;
+        return;
+      }
+
+      const header = [
+        "Data",
+        "Empresa",
+        "Ferramenta",
+        "Tipo de item",
+        "Área",
+        "Observação",
+      ];
+
+      const rows = data.map((r) => [
+        sharepointTimestamp(r),
+        r.company,
+        "Dashboard NOC",
+        "Despacho",
+        "NOC",
+        observation(r),
+      ]);
+
+      preview.innerHTML = `
+        <table>
+          <thead>
+            <tr>${header.map((h) => `<th>${h}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map((row) => `<tr>${row.map((c) => `<td>${c}</td>`).join("")}</tr>`)
+              .join("")}
+          </tbody>
+        </table>`;
+    }
+
+    // ------------------------ XLSX BUILD ------------------------
+
+    function chunkRecords(list, size) {
+      const out = [];
+      for (let i = 0; i < list.length; i += size)
+        out.push(list.slice(i, i + size));
+      return out;
+    }
+
+    function columnLetter(n) {
+      let s = "";
+      while (n > 0) {
+        const r = (n - 1) % 26;
+        s = String.fromCharCode(65 + r) + s;
+        n = Math.floor((n - 1) / 26);
+      }
+      return s;
+    }
+
+    function rowsForBlocks(blocks, headers) {
+      if (!blocks.length) return [headers];
+
+      const max = Math.max(...blocks.map((b) => b.length));
+      const rows = [];
+
+      const headerRow = [];
+      blocks.forEach((_, i) => {
+        headerRow.push(...headers);
+        if (i < blocks.length - 1) headerRow.push("");
+      });
+
+      rows.push(headerRow);
+
+      for (let i = 0; i < max; i++) {
+        const row = [];
+
+        blocks.forEach((block, idx) => {
+          if (i < block.length) {
+            const r = block[i];
+            row.push(
+              sharepointTimestamp(r),
+              r.company,
+              "Dashboard NOC",
+              "Despacho",
+              "NOC",
+              observation(r)
+            );
+          } else {
+            row.push(...headers.map(() => ""));
+          }
+
+          if (idx < blocks.length - 1) row.push("");
+        });
+
+        rows.push(row);
+      }
+
+      return rows;
+    }
+
+    function escapeXml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function sheetXml(rows) {
+      const out = [];
+
+      rows.forEach((row, r) => {
+        const cells = [];
+
+        row.forEach((value, c) => {
+          if (!value) return;
+
+          const coord = `${columnLetter(c + 1)}${r + 1}`;
+          cells.push(
+            `<c r="${coord}" t="inlineStr"><is><t>${escapeXml(
+              value
+            )}</t></is></c>`
+          );
+        });
+
+        if (cells.length)
+          out.push(`<row r="${r + 1}">${cells.join("")}</row>`);
+      });
+
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+        `<sheetData>${out.join("")}</sheetData>` +
+        `</worksheet>`
+      );
+    }
+
+    function contentTypesXml() {
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+        `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+        `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+        `</Types>`
+      );
+    }
+
+    function relsXml() {
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
+        `</Relationships>`
+      );
+    }
+
+    function workbookRelsXml() {
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+        `</Relationships>`
+      );
+    }
+
+    function workbookXml() {
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<sheets><sheet name="Despachos" sheetId="1" r:id="rId1"/></sheets>` +
+        `</workbook>`
+      );
+    }
+
+    function stylesXml() {
+      return (
+        `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+        `<fonts count="1"><font/></fonts>` +
+        `<fills count="1"><fill/></fills>` +
+        `<borders count="1"><border/></borders>` +
+        `<cellStyleXfs count="1"><xf/></cellStyleXfs>` +
+        `<cellXfs count="1"><xf xfId="0"/></cellXfs>` +
+        `</styleSheet>`
+      );
+    }
+
+    // ------------------------ ZIP BUILD ------------------------
+
+    function crc32(bytes) {
+      const table = new Uint32Array(256);
+
+      // Gera tabela
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) {
+          c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        }
+        table[i] = c >>> 0;
+      }
+
+      // Calcula CRC
+      let crc = 0xffffffff;
+
+      for (let i = 0; i < bytes.length; i++) {
+        crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+      }
+
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function encodeUtf8(text) {
+      if (window.TextEncoder) return new TextEncoder().encode(text);
+
+      const res = [];
+
+      for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+
+        if (code < 0x80) {
+          res.push(code);
+        } else if (code < 0x800) {
+          res.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+        } else {
+          res.push(
+            0xe0 | (code >> 12),
+            0x80 | ((code >> 6) & 0x3f),
+            0x80 | (code & 0x3f)
+          );
+        }
+      }
+
+      return new Uint8Array(res);
+    }
+
+    function concatUint8(arrays) {
+      const total = arrays.reduce((sum, a) => sum + a.length, 0);
+      const out = new Uint8Array(total);
+
+      let offset = 0;
+      arrays.forEach((arr) => {
+        out.set(arr, offset);
+        offset += arr.length;
+      });
+
+      return out;
+    }
+
+    function numberToBytes(v, count) {
+      const arr = new Uint8Array(count);
+
+      for (let i = 0; i < count; i++) arr[i] = (v >> (8 * i)) & 0xff;
+
+      return arr;
+    }
+
+    function buildZip(files) {
+      const localParts = [];
+      const centralParts = [];
+
+      let offset = 0;
+
+      files.forEach(({ name, content }) => {
+        const nameBytes = encodeUtf8(name);
+        const dataBytes = encodeUtf8(content);
+        const crc = crc32(dataBytes);
+
+        const header = concatUint8([
+          numberToBytes(0x04034b50, 4),
+          numberToBytes(20, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(crc, 4),
+          numberToBytes(dataBytes.length, 4),
+          numberToBytes(dataBytes.length, 4),
+          numberToBytes(nameBytes.length, 2),
+          numberToBytes(0, 2),
+          nameBytes,
+        ]);
+
+        const local = concatUint8([header, dataBytes]);
+        localParts.push(local);
+
+        const central = concatUint8([
+          numberToBytes(0x02014b50, 4),
+          numberToBytes(20, 2),
+          numberToBytes(20, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(crc, 4),
+          numberToBytes(dataBytes.length, 4),
+          numberToBytes(dataBytes.length, 4),
+          numberToBytes(nameBytes.length, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 2),
+          numberToBytes(0, 4),
+          numberToBytes(offset, 4),
+          nameBytes,
+        ]);
+
+        centralParts.push(central);
+        offset += local.length;
+      });
+
+      const centralDir = concatUint8(centralParts);
+
+      const end = concatUint8([
+        numberToBytes(0x06054b50, 4),
+        numberToBytes(0, 2),
+        numberToBytes(0, 2),
+        numberToBytes(files.length, 2),
+        numberToBytes(files.length, 2),
+        numberToBytes(centralDir.length, 4),
+        numberToBytes(offset, 4),
+        numberToBytes(0, 2),
+      ]);
+
+      const blob = new Blob(
+        [concatUint8([...localParts, centralDir, end])],
+        { type: "application/zip" }
+      );
+
+      return blob;
+    }
+
+    function buildXlsxBlob(rows) {
+      return buildZip([
+        { name: "[Content_Types].xml", content: contentTypesXml() },
+        { name: "_rels/.rels", content: relsXml() },
+        { name: "xl/_rels/workbook.xml.rels", content: workbookRelsXml() },
+        { name: "xl/workbook.xml", content: workbookXml() },
+        { name: "xl/styles.xml", content: stylesXml() },
+        { name: "xl/worksheets/sheet1.xml", content: sheetXml(rows) },
+      ]);
+    }
+
+    function downloadExcel(data) {
+      const headers = [
+        "Data",
+        "Empresa",
+        "Ferramenta",
+        "Tipo de item",
+        "Área",
+        "Observação",
+      ];
+
+      const blocks = chunkRecords(data, MAX_PER_BLOCK);
+      const rows = rowsForBlocks(blocks, headers);
+
+      const blob = buildXlsxBlob(rows);
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "registros_despacho.xlsx";
+      a.click();
+
+      URL.revokeObjectURL(url);
+    }
+
+    // ------------------------ BUTTON EVENTS ------------------------
+
+    btnProcessar.addEventListener("click", () => {
+      erro.textContent = "";
+      resumo.textContent = "";
+      preview.innerHTML = "";
+      registros = [];
+
+      try {
+        const allLines = document.getElementById("linhas").value.split(/\r?\n/);
+
+        const { shiftDate, remainingLines } = extractShiftDate(allLines);
+        registros = buildRecords(remainingLines, shiftDate);
+
+        renderPreview(registros);
+
+        resumo.textContent = `${registros.length} registro(s) processado(s).`;
+        btnBaixar.disabled = registros.length === 0;
+      } catch (e) {
+        erro.textContent = e.message;
+        btnBaixar.disabled = true;
+      }
+    });
+
+    btnBaixar.addEventListener("click", () => {
+      if (!registros.length) return;
+
+      try {
+        downloadExcel(registros);
+      } catch (e) {
+        erro.textContent = `Falha ao gerar Excel: ${e.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
