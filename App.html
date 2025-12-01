@@ -324,7 +324,13 @@
 
       const percent = parsePercent(percentPart);
 
-      return { hour, minute, company: companyPart, percent };
+      return {
+        hour,
+        minute,
+        company: companyPart,
+        percent,
+        exceededText: percentPart.trim(),
+      };
     }
 
     // ---------------------- DATA EXTRACTION ----------------------
@@ -404,6 +410,7 @@
           loggedAt,
           company: parsed.company,
           exceededPercent: parsed.percent,
+          exceededText: parsed.exceededText,
         });
 
         previousMinutes = minutes;
@@ -418,7 +425,7 @@
     }
 
     function observation(r) {
-      return `Abertura da tela de Despacho - EXCEDIDO EM: ${r.exceededPercent}%`;
+      return `Abertura da tela de Despacho - ${r.exceededText}`;
     }
 
     // ------------------------ PREVIEW TABLE ------------------------
@@ -433,7 +440,7 @@
         "Data",
         "Empresa",
         "Ferramenta",
-        "Tipo de item",
+        "Tipo alerta",
         "Área",
         "Observação",
       ];
@@ -441,9 +448,9 @@
       const rows = data.map((r) => [
         sharepointTimestamp(r),
         r.company,
-        "Dashboard NOC",
-        "Despacho",
-        "NOC",
+        "ELK",
+        "Tela de despacho",
+        "Sistemas",
         observation(r),
       ]);
 
@@ -502,9 +509,9 @@
             row.push(
               sharepointTimestamp(r),
               r.company,
-              "Dashboard NOC",
-              "Despacho",
-              "NOC",
+              "ELK",
+              "Tela de despacho",
+              "Sistemas",
               observation(r)
             );
           } else {
@@ -772,7 +779,7 @@
         "Data",
         "Empresa",
         "Ferramenta",
-        "Tipo de item",
+        "Tipo alerta",
         "Área",
         "Observação",
       ];
