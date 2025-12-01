@@ -8,16 +8,56 @@
   <style>
     :root {
       font-family: "Inter", system-ui, -apple-system, sans-serif;
-      color: #0f172a;
-      background-color: #f6f8fb;
     }
 
     body {
       margin: 0;
       padding: 28px;
-      background: #f6f8fb;
-      color: #0f172a;
+      background: var(--bg-color);
+      color: var(--text-color);
       line-height: 1.6;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+
+    body.theme-light {
+      --bg-color: #f6f8fb;
+      --text-color: #0f172a;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --muted-color: #475569;
+      --error-color: #b91c1c;
+      --input-bg: #f8fafc;
+      --input-border: #cbd5e1;
+      --button-bg: linear-gradient(135deg, #2563eb, #1d4ed8);
+      --button-border: #1d4ed8;
+      --button-hover-bg: linear-gradient(135deg, #1d4ed8, #1e40af);
+      --button-disabled-bg: #cbd5e1;
+      --button-disabled-text: #1e293b;
+      --table-bg: #ffffff;
+      --table-border: #e2e8f0;
+      --table-header-bg: #eef2ff;
+      --table-header-text: #1e3a8a;
+    }
+
+    body.theme-dark {
+      color-scheme: dark;
+      --bg-color: #0f172a;
+      --text-color: #e2e8f0;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --muted-color: #94a3b8;
+      --error-color: #f87171;
+      --input-bg: #0b1221;
+      --input-border: #1f2a40;
+      --button-bg: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      --button-border: #1d4ed8;
+      --button-hover-bg: linear-gradient(135deg, #2563eb, #1d4ed8);
+      --button-disabled-bg: #334155;
+      --button-disabled-text: #cbd5e1;
+      --table-bg: #0b1221;
+      --table-border: #1f2937;
+      --table-header-bg: #1f2937;
+      --table-header-text: #c7d2fe;
     }
 
     h1 {
@@ -27,9 +67,17 @@
       letter-spacing: -0.2px;
     }
 
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
     .card {
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 22px;
       box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), 0 8px 18px rgba(15, 23, 42, 0.05);
@@ -39,7 +87,7 @@
       display: block;
       margin-bottom: 8px;
       font-weight: 600;
-      color: #0f172a;
+      color: var(--text-color);
       font-size: 15px;
     }
 
@@ -49,9 +97,9 @@
       width: 100%;
       box-sizing: border-box;
       border-radius: 10px;
-      border: 1px solid #cbd5e1;
-      background: #f8fafc;
-      color: #0f172a;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      color: var(--text-color);
       padding: 12px 14px;
       font-size: 15px;
       transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease,
@@ -76,14 +124,14 @@
       font-weight: 700;
       letter-spacing: 0.2px;
       color: #ffffff;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      border-color: #1d4ed8;
+      background: var(--button-bg);
+      border-color: var(--button-border);
       box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
     }
 
     button:hover {
       transform: translateY(-1px);
-      background: linear-gradient(135deg, #1d4ed8, #1e40af);
+      background: var(--button-hover-bg);
       box-shadow: 0 12px 28px rgba(30, 64, 175, 0.24);
     }
 
@@ -95,9 +143,9 @@
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
-      background: #cbd5e1;
-      color: #1e293b;
-      border-color: #cbd5e1;
+      background: var(--button-disabled-bg);
+      color: var(--button-disabled-text);
+      border-color: var(--button-disabled-bg);
       box-shadow: none;
     }
 
@@ -120,7 +168,7 @@
     }
 
     .error {
-      color: #b91c1c;
+      color: var(--error-color);
       font-weight: 700;
       margin: 12px 0 0;
     }
@@ -130,24 +178,24 @@
       border-collapse: collapse;
       margin-top: 18px;
       font-size: 14px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
+      background: var(--table-bg);
+      border: 1px solid var(--table-border);
       border-radius: 12px;
       overflow: hidden;
     }
 
     th,
     td {
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--table-border);
       padding: 10px 12px;
       text-align: left;
     }
 
     th {
-      background: #eef2ff;
-      color: #1e3a8a;
+      background: var(--table-header-bg);
+      color: var(--table-header-text);
       font-weight: 700;
-      border-bottom: 1px solid #cbd5e1;
+      border-bottom: 1px solid var(--table-border);
     }
 
     tr:last-child td {
@@ -155,14 +203,24 @@
     }
 
     .muted {
-      color: #475569;
+      color: var(--muted-color);
       font-size: 13px;
+    }
+
+    .theme-toggle {
+      max-width: 180px;
+      padding: 10px 12px;
+      width: auto;
+      white-space: nowrap;
     }
   </style>
 </head>
 
-<body>
-  <h1>Formatador de Despachos</h1>
+<body class="theme-light">
+  <div class="topbar">
+    <h1>Formatador de Despachos</h1>
+    <button id="btnTema" class="theme-toggle" type="button">Tema escuro</button>
+  </div>
 
   <p class="muted">
     Informe a data do turno na <strong>primeira linha</strong> (dd/mm/aaaa) e abaixo cole os registros no padrão
@@ -194,14 +252,32 @@
     const timePattern = /^(?<hour>\d{1,2})[:hH](?<minute>\d{2})$/;
     const percentPattern = /(?<percent>\d{1,3})%/;
     const MAX_PER_BLOCK = 256;
+    const THEME_KEY = "app-theme";
 
     const btnProcessar = document.getElementById("btnProcessar");
     const btnBaixar = document.getElementById("btnBaixar");
+    const btnTema = document.getElementById("btnTema");
     const preview = document.getElementById("preview");
     const erro = document.getElementById("erro");
     const resumo = document.getElementById("resumo");
 
     let registros = [];
+
+    // ------------------------ THEME ------------------------
+
+    function applyTheme(theme) {
+      const nextTheme = theme === "dark" ? "dark" : "light";
+
+      document.body.classList.remove("theme-light", "theme-dark");
+      document.body.classList.add(`theme-${nextTheme}`);
+      localStorage.setItem(THEME_KEY, nextTheme);
+      btnTema.textContent = nextTheme === "dark" ? "Tema claro" : "Tema escuro";
+    }
+
+    function loadTheme() {
+      const stored = localStorage.getItem(THEME_KEY);
+      applyTheme(stored === "dark" ? "dark" : "light");
+    }
 
     // ------------------------ PARSERS ------------------------
 
@@ -716,6 +792,13 @@
     }
 
     // ------------------------ BUTTON EVENTS ------------------------
+
+    btnTema.addEventListener("click", () => {
+      const isDark = document.body.classList.contains("theme-dark");
+      applyTheme(isDark ? "light" : "dark");
+    });
+
+    loadTheme();
 
     btnProcessar.addEventListener("click", () => {
       erro.textContent = "";
