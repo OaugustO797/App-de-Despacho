@@ -235,6 +235,7 @@
 
     <div class="actions" style="margin-top: 12px;">
       <button id="btnProcessar">Processar</button>
+      <button id="btnCopiar" disabled>Copiar lista</button>
       <button id="btnBaixar" disabled>Baixar Excel</button>
     </div>
 
@@ -254,8 +255,18 @@
     const MAX_PER_BLOCK = 256;
     const THEME_KEY = "app-theme";
 
+    const HEADERS = [
+      "Data",
+      "Empresa",
+      "Ferramenta",
+      "Tipo alerta",
+      "Área",
+      "Observação",
+    ];
+
     const btnProcessar = document.getElementById("btnProcessar");
     const btnBaixar = document.getElementById("btnBaixar");
+    const btnCopiar = document.getElementById("btnCopiar");
     const btnTema = document.getElementById("btnTema");
     const preview = document.getElementById("preview");
     const erro = document.getElementById("erro");
@@ -437,22 +448,8 @@
 
     // ------------------------ PREVIEW TABLE ------------------------
 
-    function renderPreview(data) {
-      if (!data.length) {
-        preview.innerHTML = `<p class="muted">Nenhum registro processado.</p>`;
-        return;
-      }
-
-      const header = [
-        "Data",
-        "Empresa",
-        "Ferramenta",
-        "Tipo alerta",
-        "Área",
-        "Observação",
-      ];
-
-      const rows = data.map((r) => [
+    function recordsToRows(data) {
+      return data.map((r) => [
         sharepointTimestamp(r),
         r.company,
         "ELK",
@@ -460,11 +457,52 @@
         "Sistemas",
         observation(r),
       ]);
+    }
+
+    function rowsToClipboardText(rows) {
+      const allRows = [HEADERS, ...rows];
+      return allRows.map((row) => row.join("\t")).join("\n");
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (err) {
+          if (err && (err.name === "NotAllowedError" || err.name === "SecurityError"))
+            throw new Error("Permissão para acessar a área de transferência negada.");
+        }
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+
+      const success = document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      if (!success)
+        throw new Error("Não foi possível copiar para a área de transferência.");
+    }
+
+    function renderPreview(data) {
+      if (!data.length) {
+        preview.innerHTML = `<p class="muted">Nenhum registro processado.</p>`;
+        return;
+      }
+
+      const rows = recordsToRows(data);
 
       preview.innerHTML = `
         <table>
           <thead>
-            <tr>${header.map((h) => `<th>${h}</th>`).join("")}</tr>
+            <tr>${HEADERS.map((h) => `<th>${h}</th>`).join("")}</tr>
           </thead>
           <tbody>
             ${rows
@@ -782,17 +820,8 @@
     }
 
     function downloadExcel(data) {
-      const headers = [
-        "Data",
-        "Empresa",
-        "Ferramenta",
-        "Tipo alerta",
-        "Área",
-        "Observação",
-      ];
-
       const blocks = chunkRecords(data, MAX_PER_BLOCK);
-      const rows = rowsForBlocks(blocks, headers);
+      const rows = rowsForBlocks(blocks, HEADERS);
 
       const blob = buildXlsxBlob(rows);
       const url = URL.createObjectURL(blob);
@@ -830,9 +859,11 @@
 
         resumo.textContent = `${registros.length} registro(s) processado(s).`;
         btnBaixar.disabled = registros.length === 0;
+        btnCopiar.disabled = registros.length === 0;
       } catch (e) {
         erro.textContent = e.message;
         btnBaixar.disabled = true;
+        btnCopiar.disabled = true;
       }
     });
 
@@ -843,6 +874,20 @@
         downloadExcel(registros);
       } catch (e) {
         erro.textContent = `Falha ao gerar Excel: ${e.message}`;
+      }
+    });
+
+    btnCopiar.addEventListener("click", async () => {
+      if (!registros.length) return;
+
+      erro.textContent = "";
+
+      try {
+        const rows = recordsToRows(registros);
+        const text = rowsToClipboardText(rows);
+        await copyText(text);
+      } catch (e) {
+        erro.textContent = e.message || "Falha ao copiar lista.";
       }
     });
   </script>
