@@ -275,6 +275,7 @@
     const resumo = document.getElementById("resumo");
 
     let registros = [];
+    let shiftDateLabel = "";
 
     // ------------------------ THEME ------------------------
 
@@ -395,6 +396,12 @@
       }
 
       return { shiftDate, remainingLines: remaining };
+    }
+
+    function formatShiftDate({ day, month, year }) {
+      const d = String(day).padStart(2, "0");
+      const m = String(month).padStart(2, "0");
+      return `${d}/${m}/${year}`;
     }
 
     // ------------------------ RECORDS ------------------------
@@ -873,12 +880,14 @@
       resumo.textContent = "";
       preview.innerHTML = "";
       registros = [];
+      shiftDateLabel = "";
 
       try {
         const allLines = document.getElementById("linhas").value.split(/\r?\n/);
 
         const { shiftDate, remainingLines } = extractShiftDate(allLines);
         registros = buildRecords(remainingLines, shiftDate);
+        shiftDateLabel = formatShiftDate(shiftDate);
 
         renderPreview(registros);
 
