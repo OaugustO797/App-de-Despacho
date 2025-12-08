@@ -263,6 +263,7 @@
 
     <div class="actions" style="margin-top: 12px;">
       <button id="btnProcessar">Processar</button>
+      <button id="btnLimpar" type="button">Limpar lista</button>
       <button id="btnCopiar" disabled>Copiar lista</button>
       <button id="btnBaixar" disabled>Baixar Excel</button>
       <button id="btnLimpar" type="button">Limpar lista</button>
@@ -294,6 +295,7 @@
     ];
 
     const btnProcessar = document.getElementById("btnProcessar");
+    const btnLimpar = document.getElementById("btnLimpar");
     const btnBaixar = document.getElementById("btnBaixar");
     const btnCopiar = document.getElementById("btnCopiar");
     const btnLimpar = document.getElementById("btnLimpar");
@@ -889,25 +891,18 @@
 
     loadTheme();
 
-    function clearInterface() {
+    btnLimpar.addEventListener("click", () => {
       const linhas = document.getElementById("linhas");
 
-      if (linhas) {
-        linhas.value = "";
-        linhas.focus();
-      }
-
+      linhas.value = "";
       erro.textContent = "";
       resumo.textContent = "";
       preview.innerHTML = "";
       registros = [];
-      shiftDateLabel = "";
       btnBaixar.disabled = true;
       btnCopiar.disabled = true;
-    }
 
-    btnLimpar.addEventListener("click", () => {
-      clearInterface();
+      linhas.focus();
     });
 
     btnProcessar.addEventListener("click", () => {
@@ -953,10 +948,7 @@
 
       try {
         const lines = recordsToFormattedLines(registros);
-        const headerLine = shiftDateLabel ? `Data: ${shiftDateLabel}` : null;
-        const withHeader = headerLine ? [headerLine, ...lines] : lines;
-
-        await copyText(withHeader.join("\n"));
+        await copyText(lines.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
