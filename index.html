@@ -235,6 +235,7 @@
 
     <div class="actions" style="margin-top: 12px;">
       <button id="btnProcessar">Processar</button>
+      <button id="btnLimpar" type="button">Limpar lista</button>
       <button id="btnCopiar" disabled>Copiar lista</button>
       <button id="btnBaixar" disabled>Baixar Excel</button>
     </div>
@@ -265,6 +266,7 @@
     ];
 
     const btnProcessar = document.getElementById("btnProcessar");
+    const btnLimpar = document.getElementById("btnLimpar");
     const btnBaixar = document.getElementById("btnBaixar");
     const btnCopiar = document.getElementById("btnCopiar");
     const btnTema = document.getElementById("btnTema");
@@ -859,6 +861,20 @@
 
     loadTheme();
 
+    btnLimpar.addEventListener("click", () => {
+      const linhas = document.getElementById("linhas");
+
+      linhas.value = "";
+      erro.textContent = "";
+      resumo.textContent = "";
+      preview.innerHTML = "";
+      registros = [];
+      btnBaixar.disabled = true;
+      btnCopiar.disabled = true;
+
+      linhas.focus();
+    });
+
     btnProcessar.addEventListener("click", () => {
       erro.textContent = "";
       resumo.textContent = "";
@@ -902,9 +918,7 @@
 
       try {
         const lines = recordsToFormattedLines(registros);
-        const withHeader = shiftDateLabel ? [shiftDateLabel, ...lines] : lines;
-
-        await copyText(withHeader.join("\n"));
+        await copyText(lines.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
