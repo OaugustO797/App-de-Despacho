@@ -263,6 +263,7 @@
 
     <div class="actions" style="margin-top: 12px;">
       <button id="btnProcessar">Processar</button>
+      <button id="btnLimpar" type="button">Limpar lista</button>
       <button id="btnCopiar" disabled>Copiar lista</button>
       <button id="btnBaixar" disabled>Baixar Excel</button>
       <button id="btnLimpar" type="button">Limpar lista</button>
@@ -294,22 +295,17 @@
     ];
 
     const btnProcessar = document.getElementById("btnProcessar");
+    const btnLimpar = document.getElementById("btnLimpar");
     const btnBaixar = document.getElementById("btnBaixar");
     const btnCopiar = document.getElementById("btnCopiar");
     const btnLimpar = document.getElementById("btnLimpar");
     const themeSelect = document.getElementById("themeSelect");
-    const limparButtons = document.querySelectorAll("#btnLimpar");
     const preview = document.getElementById("preview");
     const erro = document.getElementById("erro");
     const resumo = document.getElementById("resumo");
 
     let registros = [];
     let shiftDateLabel = "";
-
-    limparButtons.forEach((btn, idx) => {
-      if (idx === 0) return;
-      btn.remove();
-    });
 
     // ------------------------ THEME ------------------------
 
@@ -325,8 +321,7 @@
 
     function loadTheme() {
       const stored = localStorage.getItem(THEME_KEY);
-      const fallback = themeSelect?.value || "light";
-      applyTheme(stored || fallback);
+      applyTheme(stored);
     }
 
     // ------------------------ PARSERS ------------------------
@@ -890,33 +885,24 @@
 
     // ------------------------ BUTTON EVENTS ------------------------
 
-    if (themeSelect) {
-      themeSelect.addEventListener("change", (event) => {
-        applyTheme(event.target.value);
-      });
-    }
+    themeSelect.addEventListener("change", (event) => {
+      applyTheme(event.target.value);
+    });
 
     loadTheme();
 
-    function clearInterface() {
+    btnLimpar.addEventListener("click", () => {
       const linhas = document.getElementById("linhas");
 
-      if (linhas) {
-        linhas.value = "";
-        linhas.focus();
-      }
-
+      linhas.value = "";
       erro.textContent = "";
       resumo.textContent = "";
       preview.innerHTML = "";
       registros = [];
-      shiftDateLabel = "";
       btnBaixar.disabled = true;
       btnCopiar.disabled = true;
-    }
 
-    btnLimpar.addEventListener("click", () => {
-      clearInterface();
+      linhas.focus();
     });
 
     btnProcessar.addEventListener("click", () => {
@@ -962,10 +948,7 @@
 
       try {
         const lines = recordsToFormattedLines(registros);
-        const headerLine = shiftDateLabel ? `Data: ${shiftDateLabel}` : null;
-        const withHeader = headerLine ? [headerLine, ...lines] : lines;
-
-        await copyText(withHeader.join("\n"));
+        await copyText(lines.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
