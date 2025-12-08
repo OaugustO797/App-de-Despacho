@@ -285,14 +285,14 @@
     const MAX_PER_BLOCK = 256;
     const THEME_KEY = "app-theme";
 
-    const HEADERS = [
-      "Data",
-      "Empresa",
-      "Ferramenta",
-      "Tipo alerta",
-      "Área",
-      "Observação",
-    ];
+      const HEADERS = [
+        "Data",
+        "Empresa",
+        "Ferramenta",
+        "Tipo alerta",
+        "Área",
+        "Observação",
+      ];
 
     const btnProcessar = document.getElementById("btnProcessar");
     const btnLimpar = document.getElementById("btnLimpar");
@@ -307,7 +307,9 @@
     let registros = [];
     let shiftDateLabel = "";
 
-    // ------------------------ THEME ------------------------
+      if (limparButtons.length > 1) {
+        limparButtons.slice(1).forEach((extra) => extra.remove());
+      }
 
     function applyTheme(theme) {
       const allowed = ["light", "dark", "matrix"];
