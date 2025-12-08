@@ -273,6 +273,7 @@
     const resumo = document.getElementById("resumo");
 
     let registros = [];
+    let shiftDateLabel = "";
 
     // ------------------------ THEME ------------------------
 
@@ -395,6 +396,12 @@
       return { shiftDate, remainingLines: remaining };
     }
 
+    function formatShiftDate({ day, month, year }) {
+      const d = String(day).padStart(2, "0");
+      const m = String(month).padStart(2, "0");
+      return `${d}/${m}/${year}`;
+    }
+
     // ------------------------ RECORDS ------------------------
 
     function buildRecords(lines, shiftDate) {
@@ -462,6 +469,15 @@
     function rowsToClipboardText(rows) {
       const allRows = [HEADERS, ...rows];
       return allRows.map((row) => row.join("\t")).join("\n");
+    }
+
+    function recordsToFormattedLines(data) {
+      return data.map((record) => {
+        const hours = String(record.loggedAt.getUTCHours()).padStart(2, "0");
+        const minutes = String(record.loggedAt.getUTCMinutes()).padStart(2, "0");
+
+        return `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`;
+      });
     }
 
     async function copyText(text) {
@@ -848,12 +864,14 @@
       resumo.textContent = "";
       preview.innerHTML = "";
       registros = [];
+      shiftDateLabel = "";
 
       try {
         const allLines = document.getElementById("linhas").value.split(/\r?\n/);
 
         const { shiftDate, remainingLines } = extractShiftDate(allLines);
         registros = buildRecords(remainingLines, shiftDate);
+        shiftDateLabel = formatShiftDate(shiftDate);
 
         renderPreview(registros);
 
@@ -883,9 +901,10 @@
       erro.textContent = "";
 
       try {
-        const rows = recordsToRows(registros);
-        const text = rowsToClipboardText(rows);
-        await copyText(text);
+        const lines = recordsToFormattedLines(registros);
+        const withHeader = shiftDateLabel ? [shiftDateLabel, ...lines] : lines;
+
+        await copyText(withHeader.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
