@@ -60,6 +60,27 @@
       --table-header-text: #c7d2fe;
     }
 
+    body.theme-matrix {
+      color-scheme: dark;
+      --bg-color: #020b02;
+      --text-color: #c8f7c5;
+      --card-bg: #051505;
+      --card-border: #0f2d0f;
+      --muted-color: #6baa6b;
+      --error-color: #ff8a80;
+      --input-bg: #031003;
+      --input-border: #0f2d0f;
+      --button-bg: linear-gradient(135deg, #0fd64f, #0a9b3a);
+      --button-border: #0a9b3a;
+      --button-hover-bg: linear-gradient(135deg, #0a9b3a, #087830);
+      --button-disabled-bg: #144b1b;
+      --button-disabled-text: #85c99a;
+      --table-bg: #031003;
+      --table-border: #0f2d0f;
+      --table-header-bg: #0a1f0a;
+      --table-header-text: #6cff9b;
+    }
+
     h1 {
       margin: 0 0 12px;
       font-size: 26px;
@@ -208,7 +229,7 @@
     }
 
     .theme-toggle {
-      max-width: 180px;
+      max-width: 220px;
       padding: 10px 12px;
       width: auto;
       white-space: nowrap;
@@ -217,10 +238,17 @@
 </head>
 
 <body class="theme-light">
-  <div class="topbar">
-    <h1>Formatador de Despachos</h1>
-    <button id="btnTema" class="theme-toggle" type="button">Tema escuro</button>
-  </div>
+    <div class="topbar">
+      <h1>Formatador de Despachos</h1>
+      <label style="margin: 0;">
+        <span class="muted" style="display: block; margin-bottom: 6px;">Tema</span>
+        <select id="themeSelect" class="theme-toggle">
+          <option value="light">Claro</option>
+          <option value="dark">Escuro</option>
+          <option value="matrix">Matrix</option>
+        </select>
+      </label>
+    </div>
 
   <p class="muted">
     Informe a data do turno na <strong>primeira linha</strong> (dd/mm/aaaa) e abaixo cole os registros no padrão
@@ -237,6 +265,7 @@
       <button id="btnProcessar">Processar</button>
       <button id="btnCopiar" disabled>Copiar lista</button>
       <button id="btnBaixar" disabled>Baixar Excel</button>
+      <button id="btnLimpar" type="button">Limpar lista</button>
     </div>
 
     <div id="erro" class="error" role="alert" aria-live="polite"></div>
@@ -267,27 +296,30 @@
     const btnProcessar = document.getElementById("btnProcessar");
     const btnBaixar = document.getElementById("btnBaixar");
     const btnCopiar = document.getElementById("btnCopiar");
-    const btnTema = document.getElementById("btnTema");
+    const btnLimpar = document.getElementById("btnLimpar");
+    const themeSelect = document.getElementById("themeSelect");
     const preview = document.getElementById("preview");
     const erro = document.getElementById("erro");
     const resumo = document.getElementById("resumo");
 
     let registros = [];
+    let shiftDateLabel = "";
 
     // ------------------------ THEME ------------------------
 
     function applyTheme(theme) {
-      const nextTheme = theme === "dark" ? "dark" : "light";
+      const allowed = ["light", "dark", "matrix"];
+      const nextTheme = allowed.includes(theme) ? theme : "light";
 
-      document.body.classList.remove("theme-light", "theme-dark");
+      document.body.classList.remove("theme-light", "theme-dark", "theme-matrix");
       document.body.classList.add(`theme-${nextTheme}`);
       localStorage.setItem(THEME_KEY, nextTheme);
-      btnTema.textContent = nextTheme === "dark" ? "Tema claro" : "Tema escuro";
+      if (themeSelect) themeSelect.value = nextTheme;
     }
 
     function loadTheme() {
       const stored = localStorage.getItem(THEME_KEY);
-      applyTheme(stored === "dark" ? "dark" : "light");
+      applyTheme(stored);
     }
 
     // ------------------------ PARSERS ------------------------
@@ -395,6 +427,12 @@
       return { shiftDate, remainingLines: remaining };
     }
 
+    function formatShiftDate({ day, month, year }) {
+      const d = String(day).padStart(2, "0");
+      const m = String(month).padStart(2, "0");
+      return `${d}/${m}/${year}`;
+    }
+
     // ------------------------ RECORDS ------------------------
 
     function buildRecords(lines, shiftDate) {
@@ -462,6 +500,15 @@
     function rowsToClipboardText(rows) {
       const allRows = [HEADERS, ...rows];
       return allRows.map((row) => row.join("\t")).join("\n");
+    }
+
+    function recordsToFormattedLines(data) {
+      return data.map((record) => {
+        const hours = String(record.loggedAt.getUTCHours()).padStart(2, "0");
+        const minutes = String(record.loggedAt.getUTCMinutes()).padStart(2, "0");
+
+        return `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`;
+      });
     }
 
     async function copyText(text) {
@@ -836,24 +883,46 @@
 
     // ------------------------ BUTTON EVENTS ------------------------
 
-    btnTema.addEventListener("click", () => {
-      const isDark = document.body.classList.contains("theme-dark");
-      applyTheme(isDark ? "light" : "dark");
+    themeSelect.addEventListener("change", (event) => {
+      applyTheme(event.target.value);
     });
 
     loadTheme();
+
+    function clearInterface() {
+      const linhas = document.getElementById("linhas");
+
+      if (linhas) {
+        linhas.value = "";
+        linhas.focus();
+      }
+
+      erro.textContent = "";
+      resumo.textContent = "";
+      preview.innerHTML = "";
+      registros = [];
+      shiftDateLabel = "";
+      btnBaixar.disabled = true;
+      btnCopiar.disabled = true;
+    }
+
+    btnLimpar.addEventListener("click", () => {
+      clearInterface();
+    });
 
     btnProcessar.addEventListener("click", () => {
       erro.textContent = "";
       resumo.textContent = "";
       preview.innerHTML = "";
       registros = [];
+      shiftDateLabel = "";
 
       try {
         const allLines = document.getElementById("linhas").value.split(/\r?\n/);
 
         const { shiftDate, remainingLines } = extractShiftDate(allLines);
         registros = buildRecords(remainingLines, shiftDate);
+        shiftDateLabel = formatShiftDate(shiftDate);
 
         renderPreview(registros);
 
@@ -883,9 +952,11 @@
       erro.textContent = "";
 
       try {
-        const rows = recordsToRows(registros);
-        const text = rowsToClipboardText(rows);
-        await copyText(text);
+        const lines = recordsToFormattedLines(registros);
+        const headerLine = shiftDateLabel ? `Data: ${shiftDateLabel}` : null;
+        const withHeader = headerLine ? [headerLine, ...lines] : lines;
+
+        await copyText(withHeader.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
