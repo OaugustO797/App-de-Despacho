@@ -464,6 +464,15 @@
       return allRows.map((row) => row.join("\t")).join("\n");
     }
 
+    function recordsToFormattedLines(data) {
+      return data.map((record) => {
+        const hours = String(record.loggedAt.getUTCHours()).padStart(2, "0");
+        const minutes = String(record.loggedAt.getUTCMinutes()).padStart(2, "0");
+
+        return `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`;
+      });
+    }
+
     async function copyText(text) {
       if (navigator.clipboard?.writeText) {
         try {
@@ -883,9 +892,8 @@
       erro.textContent = "";
 
       try {
-        const rows = recordsToRows(registros);
-        const text = rowsToClipboardText(rows);
-        await copyText(text);
+        const lines = recordsToFormattedLines(registros);
+        await copyText(lines.join("\n"));
       } catch (e) {
         erro.textContent = e.message || "Falha ao copiar lista.";
       }
