@@ -441,6 +441,7 @@
         const parsed = parseLine(line);
         const minutes = parsed.hour * 60 + parsed.minute;
 
+        // virada de dia: hora/minuto "volta" para menor que o anterior
         if (previousMinutes !== null && minutes < previousMinutes) {
           const dateObj = new Date(Date.UTC(y, m - 1, d));
           dateObj.setUTCDate(dateObj.getUTCDate() + 1);
@@ -495,13 +496,46 @@
       return allRows.map((row) => row.join("\t")).join("\n");
     }
 
+    // helper pra formatar data a partir de um record
+    function formatRecordDate(record) {
+      const d = record.loggedAt;
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const year = d.getUTCFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    // agora insere datas no meio da lista quando houver virada de dia
     function recordsToFormattedLines(data) {
-      return data.map((record) => {
+      const lines = [];
+      let lastDateKey = null;
+
+      for (const record of data) {
+        const d = record.loggedAt;
+        const dateKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+
+        // se mudou a data (virada de dia), insere a nova data na lista
+        if (lastDateKey !== null && dateKey !== lastDateKey) {
+          lines.push(""); // linha em branco para separar
+          lines.push(formatRecordDate(record));
+          lines.push("");
+        }
+
+        if (lastDateKey === null) {
+          lastDateKey = dateKey;
+        } else if (dateKey !== lastDateKey) {
+          lastDateKey = dateKey;
+        }
+
         const hours = String(record.loggedAt.getUTCHours()).padStart(2, "0");
         const minutes = String(record.loggedAt.getUTCMinutes()).padStart(2, "0");
 
-        return `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`;
-      });
+        lines.push(
+          `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`
+        );
+      }
+
+      return lines;
     }
 
     async function copyText(text) {
@@ -709,9 +743,10 @@
     function crc32(bytes) {
       const table = new Uint32Array(256);
 
+      // gera tabela
       for (let i = 0; i < 256; i++) {
         let c = i;
-        for (let k = 0; 0 < 8 && k < 8; k++) {
+        for (let k = 0; k < 8; k++) {
           c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
         }
         table[i] = c >>> 0;
@@ -938,7 +973,7 @@
       try {
         const lines = recordsToFormattedLines(registros);
 
-        // adiciona a data do turno no topo
+        // data principal no topo
         const header = shiftDateLabel ? `${shiftDateLabel}\n\n` : "";
         const textToCopy = header + lines.join("\n");
 
