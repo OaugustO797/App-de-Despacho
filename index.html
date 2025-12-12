@@ -280,6 +280,7 @@
     const MAX_PER_BLOCK = 256;
     const THEME_KEY = "app-theme";
     const DAY_ROLLOVER_THRESHOLD_MINUTES = 6 * 60; // tolera pequenas reordenacoes sem criar virada de dia
+    const DATE_LINE_PATTERN = /^\s*(?<day>\d{2})\/(?<month>\d{2})\/(?<year>\d{4})\s*$/;
 
     const HEADERS = [
       "Data",
@@ -380,8 +381,6 @@
     // ---------------------- DATA EXTRACTION ----------------------
 
     function extractShiftDate(lines) {
-      const pattern = /^\s*(?<day>\d{2})\/(?<month>\d{2})\/(?<year>\d{4})\s*$/;
-
       let dateLineIndex = -1;
       let shiftDate = null;
 
@@ -389,7 +388,7 @@
         const line = lines[i];
         if (!line.trim()) continue;
 
-        const match = line.match(pattern);
+        const match = line.match(DATE_LINE_PATTERN);
         if (!match) continue;
 
         const day = Number(match.groups.day);
@@ -427,6 +426,20 @@
       return `${d}/${m}/${year}`;
     }
 
+    function parseDateLine(line) {
+      const match = line.match(DATE_LINE_PATTERN);
+      if (!match) return null;
+
+      const day = Number(match.groups.day);
+      const month = Number(match.groups.month);
+      const year = Number(match.groups.year);
+
+      if (day < 1 || day > 31 || month < 1 || month > 12)
+        throw new Error(`Data invÇ­lida: '${line.trim()}'`);
+
+      return { day, month, year };
+    }
+
     // ------------------------ RECORDS ------------------------
 
     function buildRecords(lines, shiftDate) {
@@ -438,6 +451,16 @@
       for (const raw of lines) {
         const line = raw.trim();
         if (!line) continue;
+
+        // permite linhas de data no meio da lista para mudar o dia explicitamente
+        const inlineDate = parseDateLine(line);
+        if (inlineDate) {
+          d = inlineDate.day;
+          m = inlineDate.month;
+          y = inlineDate.year;
+          highestMinutes = null; // reseta pico ao trocar de dia manualmente
+          continue;
+        }
 
         const parsed = parseLine(line);
         const minutes = parsed.hour * 60 + parsed.minute;
