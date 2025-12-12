@@ -279,6 +279,7 @@
     const percentPattern = /(?<percent>\d{1,3})%/;
     const MAX_PER_BLOCK = 256;
     const THEME_KEY = "app-theme";
+    const DAY_ROLLOVER_THRESHOLD_MINUTES = 6 * 60; // tolera pequenas reordenacoes sem criar virada de dia
 
     const HEADERS = [
       "Data",
@@ -432,7 +433,7 @@
       const results = [];
       let { day: d, month: m, year: y } = shiftDate;
 
-      let previousMinutes = null;
+      let highestMinutes = null; // maior horario ja visto no dia corrente
 
       for (const raw of lines) {
         const line = raw.trim();
@@ -441,14 +442,22 @@
         const parsed = parseLine(line);
         const minutes = parsed.hour * 60 + parsed.minute;
 
-        // virada de dia: hora/minuto "volta" para menor que o anterior
-        if (previousMinutes !== null && minutes < previousMinutes) {
+        // virada de dia: hora/minuto cai muito em relacao ao maior ponto ja visto
+        // tolera pequenas desordenacoes na lista sem criar novo dia
+        const diffFromPeak = highestMinutes !== null ? highestMinutes - minutes : 0;
+        if (
+          highestMinutes !== null &&
+          diffFromPeak >= DAY_ROLLOVER_THRESHOLD_MINUTES
+        ) {
           const dateObj = new Date(Date.UTC(y, m - 1, d));
           dateObj.setUTCDate(dateObj.getUTCDate() + 1);
 
           y = dateObj.getUTCFullYear();
           m = dateObj.getUTCMonth() + 1;
           d = dateObj.getUTCDate();
+
+          // reseta pico para novo dia
+          highestMinutes = null;
         }
 
         const loggedAt = new Date(
@@ -463,7 +472,8 @@
           exceededText: parsed.exceededText,
         });
 
-        previousMinutes = minutes;
+        highestMinutes =
+          highestMinutes === null ? minutes : Math.max(highestMinutes, minutes);
       }
 
       return results;
