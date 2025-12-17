@@ -344,6 +344,17 @@
       return percent;
     }
 
+    function parsePercentOptional(text) {
+      const match = text.match(percentPattern);
+      if (!match) return null;
+
+      const percent = Number(match.groups.percent);
+      if (percent < 0 || percent > 100)
+        throw new Error(`Percentual fora do intervalo 0-100: ${percent}`);
+
+      return percent;
+    }
+
     function extractExceededText(text) {
       const match = text.match(/excedido\s*em:\s*\d{1,3}%/i);
       if (match) return match[0].trim();
@@ -364,17 +375,18 @@
 
       const { hour, minute } = parseTimePiece(timePart);
 
-      if (!/^[A-Z0-9]{3}$/.test(companyPart))
+      if (!/^[A-Z0-9]{3}(\s*,\s*[A-Z0-9]{3})*$/.test(companyPart))
         throw new Error(`Empresa inválida: '${companyPart}'. Use 3 dígitos/letras.`);
 
-      const percent = parsePercent(percentPart);
+      const percent = parsePercentOptional(percentPart);
+      const exceededText = percent === null ? "" : extractExceededText(percentPart);
 
       return {
         hour,
         minute,
         company: companyPart,
         percent,
-        exceededText: extractExceededText(percentPart),
+        exceededText,
       };
     }
 
@@ -487,12 +499,19 @@
           Date.UTC(y, m - 1, d, parsed.hour, parsed.minute)
         );
 
-        results.push({
-          originalLine: line,
-          loggedAt,
-          company: parsed.company,
-          exceededPercent: parsed.percent,
-          exceededText: parsed.exceededText,
+        const companies = parsed.company
+          .split(",")
+          .map((company) => company.trim())
+          .filter(Boolean);
+
+        companies.forEach((company) => {
+          results.push({
+            originalLine: line,
+            loggedAt,
+            company,
+            exceededPercent: parsed.percent,
+            exceededText: parsed.exceededText,
+          });
         });
 
         highestMinutes =
@@ -563,8 +582,9 @@
         const hours = String(record.loggedAt.getUTCHours()).padStart(2, "0");
         const minutes = String(record.loggedAt.getUTCMinutes()).padStart(2, "0");
 
+        const tail = record.exceededText ? ` - ${record.exceededText}` : "";
         lines.push(
-          `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company} - ${record.exceededText}`
+          `${hours}:${minutes} - Abertura da tela de Despacho - ${record.company}${tail}`
         );
       }
 
